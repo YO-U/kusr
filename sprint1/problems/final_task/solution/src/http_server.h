@@ -30,6 +30,15 @@ public:
 
     void Run();
 
+protected:
+    using HttpRequest = http::request<http::string_body>;
+
+    explicit SessionBase(tcp::socket&& socket)
+        : stream_(std::move(socket)) {
+    }
+
+    ~SessionBase() = default;
+
     template <typename Body, typename Fields>
     void Write(http::response<Body, Fields>&& response) {
         auto safe_response = std::make_shared<http::response<Body, Fields>>(std::move(response));
@@ -39,15 +48,6 @@ public:
                               self->OnWrite(safe_response->need_eof(), ec, bytes_written);
                           });
     }
-
-protected:
-    using HttpRequest = http::request<http::string_body>;
-
-    explicit SessionBase(tcp::socket&& socket)
-        : stream_(std::move(socket)) {
-    }
-
-    ~SessionBase() = default;
 
 private:
     void Read();
@@ -72,10 +72,15 @@ public:
         , request_handler_(std::forward<Handler>(request_handler)) {
     }
 
+    template <typename Body, typename Fields>
+    void Send(http::response<Body, Fields>&& response) {
+        Write(std::move(response));
+    }
+
 private:
     void HandleRequest(HttpRequest&& request) override {
         request_handler_(std::move(request), [self = this->shared_from_this()](auto&& response) {
-            self->Write(std::move(response));
+            self->Send(std::forward<decltype(response)>(response));
         });
     }
 
