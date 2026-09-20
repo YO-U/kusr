@@ -30,15 +30,6 @@ public:
 
     void Run();
 
-protected:
-    using HttpRequest = http::request<http::string_body>;
-
-    explicit SessionBase(tcp::socket&& socket)
-        : stream_(std::move(socket)) {
-    }
-
-    ~SessionBase() = default;
-
     template <typename Body, typename Fields>
     void Write(http::response<Body, Fields>&& response) {
         auto safe_response = std::make_shared<http::response<Body, Fields>>(std::move(response));
@@ -48,6 +39,15 @@ protected:
                               self->OnWrite(safe_response->need_eof(), ec, bytes_written);
                           });
     }
+
+protected:
+    using HttpRequest = http::request<http::string_body>;
+
+    explicit SessionBase(tcp::socket&& socket)
+        : stream_(std::move(socket)) {
+    }
+
+    ~SessionBase() = default;
 
 private:
     void Read();
