@@ -33,9 +33,9 @@ int main(int argc, const char* argv[]) {
         po::options_description desc("Allowed options");
         desc.add_options()
             ("help,h", "produce help message")
-            ("tick-period,t", po::value<unsigned>(), "set tick period")
-            ("config-file,c", po::value<std::string>(), "set config file path")
-            ("www-root,w", po::value<std::string>(), "set static files root")
+            ("tick-period,t", po::value<unsigned>()->value_name("milliseconds"), "set tick period")
+            ("config-file,c", po::value<std::string>()->value_name("file"), "set config file path")
+            ("www-root,w", po::value<std::string>()->value_name("dir"), "set static files root")
             ("randomize-spawn-points", "spawn dogs at random positions");
 
         po::variables_map vm;
@@ -57,6 +57,7 @@ int main(int argc, const char* argv[]) {
         bool randomize_spawn = vm.count("randomize-spawn-points") > 0;
 
         model::Game game = json_loader::LoadGame(config_path);
+        game.SetRandomizeSpawn(randomize_spawn);
 
         const unsigned num_threads = std::thread::hardware_concurrency();
         net::io_context ioc(num_threads);
