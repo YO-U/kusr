@@ -13,6 +13,7 @@
 #include <mutex>
 
 namespace http_handler {
+using namespace std::literals;
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace json = boost::json;
@@ -282,7 +283,10 @@ private:
         fs::path rp(dt); fs::path fp=static_root_/rp;
         fs::path cr=fs::weakly_canonical(static_root_);
         fs::path cp=fs::weakly_canonical(fp);
-        if(cp.string().find(cr.string())!=0){
+        std::string crs=cr.generic_string();
+        std::string cps=cp.generic_string();
+        if(!crs.empty()&&crs.back()!='/') crs.push_back('/');
+        if(cps!=cr.generic_string()&&!cps.starts_with(crs)){
             auto r=MakeResp(req,http::status::bad_request,"Bad request"s);
             r.set(http::field::content_type,"text/plain");r.content_length(r.body().size());send(std::move(r));return;
         }
