@@ -1,11 +1,28 @@
 #include "http_server.h"
 
 #include <boost/asio/dispatch.hpp>
+#include <boost/json.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/log/expressions/keyword.hpp>
+#include <boost/log/utility/manipulators/add_value.hpp>
 
 namespace http_server {
 
+namespace json = boost::json;
+namespace logging = boost::log;
+
+BOOST_LOG_ATTRIBUTE_KEYWORD(additional_data, "AdditionalData", json::value)
+
 void ReportError(beast::error_code ec, std::string_view what) {
-    std::cerr << what << ": " << ec.message() << std::endl;
+    using namespace std::literals;
+    if (what != "read"sv && what != "write"sv && what != "accept"sv) {
+        return;
+    }
+    json::object data;
+    data["code"] = ec.value();
+    data["text"] = ec.message();
+    data["where"] = std::string(what);
+    BOOST_LOG_TRIVIAL(info) << logging::add_value(additional_data, json::value(data)) << "error"sv;
 }
 
 void SessionBase::Run() {

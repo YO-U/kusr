@@ -51,6 +51,15 @@ protected:
 
     ~SessionBase() = default;
 
+    std::string RemoteAddress() const {
+        beast::error_code ec;
+        auto endpoint = stream_.socket().remote_endpoint(ec);
+        if (ec) {
+            return {};
+        }
+        return endpoint.address().to_string();
+    }
+
 private:
     void Read();
     void OnRead(beast::error_code ec, [[maybe_unused]] std::size_t bytes_read);
@@ -75,9 +84,10 @@ public:
 
 private:
     void HandleRequest(HttpRequest&& request) override {
+        const std::string ip = RemoteAddress();
         request_handler_(std::move(request), [self = GetSharedThis()](auto&& response) {
             self->Write(std::forward<decltype(response)>(response));
-        });
+        }, ip);
     }
 
     std::shared_ptr<SessionBase> GetSharedThis() override {

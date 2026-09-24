@@ -11,8 +11,12 @@
 #include <chrono>
 #include <optional>
 #include <mutex>
+#include <boost/log/trivial.hpp>
+#include <boost/log/expressions/keyword.hpp>
+#include <boost/log/utility/manipulators/add_value.hpp>
 
 namespace http_handler {
+using namespace std::literals;
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace json = boost::json;
@@ -94,6 +98,8 @@ inline std::string JsonError(const std::string& c, const std::string& m) {
     return json::serialize(o);
 }
 
+BOOST_LOG_ATTRIBUTE_KEYWORD(additional_data, "AdditionalData", json::value)
+
 class RequestHandler {
 public:
     RequestHandler(model::Game& game, const fs::path& static_root, bool auto_tick = false)
@@ -102,8 +108,30 @@ public:
     RequestHandler& operator=(const RequestHandler&) = delete;
 
     template <typename Body, typename Allocator, typename Send>
-    void operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send) {
+    void operator()(http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send, const std::string& client_ip = {}) {
         using namespace std::literals;
+        const auto started = std::chrono::steady_clock::now();
+        json::object req_data;
+        req_data["ip"] = client_ip;
+        req_data["URI"] = std::string(req.target());
+        req_data["method"] = std::string(http::to_string(req.method()));
+        BOOST_LOG_TRIVIAL(info) << boost::log::add_value(additional_data, json::value(req_data)) << "request received"sv;
+        auto logged_send = [&send, started, client_ip](auto&& response) {
+            const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::steady_clock::now() - started)
+                                .count();
+            json::object data;
+            data["ip"] = client_ip;
+            data["response_time"] = ms;
+            data["code"] = response.result_int();
+            if (auto it = response.find(http::field::content_type); it != response.end()) {
+                data["content_type"] = std::string(it->value());
+            } else {
+                data["content_type"] = nullptr;
+            }
+            BOOST_LOG_TRIVIAL(info) << boost::log::add_value(additional_data, json::value(data)) << "response sent"sv;
+            send(std::forward<decltype(response)>(response));
+        };
         std::string_view target = req.target();
         if(auto pos=target.find(0x3F);pos!=std::string_view::npos)target=target.substr(0,pos);
         auto jr = [&req](http::status s, std::string b, std::optional<std::string_view> cc=std::nullopt){
@@ -113,11 +141,11 @@ public:
             r.keep_alive(req.keep_alive()); r.body()=std::move(b);
             r.content_length(r.body().size()); return r;
         };
-        if(target.starts_with(api_prefix)){HandleApi(req,send,target,jr);return;}
+        if(target.starts_with(api_prefix)){HandleApi(req,logged_send,target,jr);return;}
         if(req.method()!=http::verb::get&&req.method()!=http::verb::head){
-            send(jr(http::status::bad_request,std::string{bad_request_body}));return;
+            logged_send(jr(http::status::bad_request,std::string{bad_request_body}));return;
         }
-        ServeStatic(req,send);
+        ServeStatic(req,logged_send);
     }
 
 private:
@@ -282,7 +310,10 @@ private:
         fs::path rp(dt); fs::path fp=static_root_/rp;
         fs::path cr=fs::weakly_canonical(static_root_);
         fs::path cp=fs::weakly_canonical(fp);
-        if(cp.string().find(cr.string())!=0){
+        std::string crs=cr.generic_string();
+        std::string cps=cp.generic_string();
+        if(!crs.empty()&&crs.back()!='/') crs.push_back('/');
+        if(cps!=cr.generic_string()&&!cps.starts_with(crs)){
             auto r=MakeResp(req,http::status::bad_request,"Bad request"s);
             r.set(http::field::content_type,"text/plain");r.content_length(r.body().size());send(std::move(r));return;
         }
