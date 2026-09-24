@@ -7,6 +7,8 @@
 #include <memory>
 #include <sstream>
 #include <iomanip>
+#include <limits>
+#include <utility>
 
 #include "tagged.h"
 
@@ -31,6 +33,7 @@ struct Rectangle {
 struct Offset {
     Dimension dx, dy;
 };
+
 class Road {
     struct HorizontalTag {
         explicit HorizontalTag() = default;
@@ -68,7 +71,23 @@ private:
 class Office {
 public:
     using Id = util::Tagged<std::string, Office>;
+
     Office(Id id, Point position, Offset offset) noexcept
+        : id_{std::move(id)}
+        , position_{position}
+        , offset_{offset} {
+    }
+
+    const Id& GetId() const noexcept { return id_; }
+    Point GetPosition() const noexcept { return position_; }
+    Offset GetOffset() const noexcept { return offset_; }
+
+private:
+    Id id_;
+    Point position_;
+    Offset offset_;
+};
+
 class Dog {
 public:
     Dog() : pos_{0.0, 0.0}, speed_{0.0, 0.0}, dir_("U") {}
@@ -92,6 +111,10 @@ public:
 private:
     std::string name_;
     std::pair<double, double> pos_;
+    std::pair<double, double> speed_;
+    std::string dir_;
+};
+
 class Map {
 public:
     using Id = util::Tagged<std::string, Map>;
@@ -112,15 +135,28 @@ public:
     void AddBuilding(const Building& building) { buildings_.emplace_back(building); }
     void AddOffice(Office office);
 
+    void SetRandomizeSpawn(bool value) { randomize_spawn_ = value; }
+
     const Dog* AddDog(const std::string& name) {
         dogs_.emplace_back();
         Dog& dog = dogs_.back();
         dog.SetName(name);
-        // Spawn at start of first road (for game_state task)
         if (!roads_.empty()) {
-            const auto& road = roads_[0];
-            const auto start = road.GetStart();
-            dog.SetPosition(static_cast<double>(start.x), static_cast<double>(start.y));
+            if (randomize_spawn_) {
+                std::mt19937 gen{std::random_device{}()};
+                std::uniform_int_distribution<size_t> road_dist(0, roads_.size() - 1);
+                const auto& road = roads_[road_dist(gen)];
+                const auto start = road.GetStart();
+                const auto end = road.GetEnd();
+                std::uniform_real_distribution<double> t_dist(0.0, 1.0);
+                const double t = t_dist(gen);
+                const double x = start.x + (static_cast<double>(end.x) - start.x) * t;
+                const double y = start.y + (static_cast<double>(end.y) - start.y) * t;
+                dog.SetPosition(x, y);
+            } else {
+                const auto start = roads_.front().GetStart();
+                dog.SetPosition(static_cast<double>(start.x), static_cast<double>(start.y));
+            }
         }
         dog.SetSpeed(0.0, 0.0);
         dog.SetDirection("U");
@@ -143,6 +179,7 @@ private:
     Offices offices_;
     std::vector<Dog> dogs_;
     double dog_speed_ = 1.0;
+    bool randomize_spawn_ = false;
 };
 
 class Player {
@@ -182,44 +219,63 @@ public:
         return nullptr;
     }
 
-void Tick(int time_delta_ms) {
-        double dt = time_delta_ms / 1000.0;
-        const double half_width = 0.4;
+    void Tick(int time_delta_ms) {
+        const double dt = time_delta_ms / 1000.0;
+        constexpr double half_width = 0.4;
         for (auto& dog : map_->GetDogs()) {
-            auto [sx, sy] = dog.GetSpeed();
-            if (sx == 0.0 && sy == 0.0) continue;
-            auto [px, py] = dog.GetPosition();
-            double new_x = px + sx * dt;
-            double new_y = py + sy * dt;
+            const double sx = dog.GetSpeed().first;
+            const double sy = dog.GetSpeed().second;
+            if (sx == 0.0 && sy == 0.0) {
+                continue;
+            }
+            const double px = dog.GetPosition().first;
+            const double py = dog.GetPosition().second;
+
+            double min_x = std::numeric_limits<double>::infinity();
+            double max_x = -std::numeric_limits<double>::infinity();
+            double min_y = std::numeric_limits<double>::infinity();
+            double max_y = -std::numeric_limits<double>::infinity();
             bool on_road = false;
             for (const auto& road : map_->GetRoads()) {
-                auto start = road.GetStart(); auto end = road.GetEnd();
-                if (road.IsHorizontal()) {
-                    double min_x = std::min<double>(start.x, end.x);
-                    double max_x = std::max<double>(start.x, end.x);
-                    double ry = static_cast<double>(start.y);
-                    if (new_y >= ry - half_width && new_y <= ry + half_width) {
-                        if (new_x >= min_x - half_width && new_x <= max_x + half_width) {
-                            on_road = true;
-                            new_x = std::clamp(new_x, min_x - half_width, max_x + half_width);
-                            break;
-                        }
-                    }
-                } else {
-                    double min_y = std::min<double>(start.y, end.y);
-                    double max_y = std::max<double>(start.y, end.y);
-                    double rx = static_cast<double>(start.x);
-                    if (new_x >= rx - half_width && new_x <= rx + half_width) {
-                        if (new_y >= min_y - half_width && new_y <= max_y + half_width) {
-                            on_road = true;
-                            new_y = std::clamp(new_y, min_y - half_width, max_y + half_width);
-                            break;
-                        }
-                    }
+                const auto start = road.GetStart();
+                const auto end = road.GetEnd();
+                const double rx0 = std::min<double>(start.x, end.x) - half_width;
+                const double rx1 = std::max<double>(start.x, end.x) + half_width;
+                const double ry0 = std::min<double>(start.y, end.y) - half_width;
+                const double ry1 = std::max<double>(start.y, end.y) + half_width;
+                if (px >= rx0 && px <= rx1 && py >= ry0 && py <= ry1) {
+                    on_road = true;
+                    min_x = std::min(min_x, rx0);
+                    max_x = std::max(max_x, rx1);
+                    min_y = std::min(min_y, ry0);
+                    max_y = std::max(max_y, ry1);
                 }
             }
-            if (on_road) { dog.SetPosition(new_x, new_y); }
-            else { dog.SetSpeed(0.0, 0.0); }
+            if (!on_road) {
+                dog.SetSpeed(0.0, 0.0);
+                continue;
+            }
+            double nx = px + sx * dt;
+            double ny = py + sy * dt;
+            bool stopped = false;
+            if (nx < min_x) {
+                nx = min_x;
+                stopped = true;
+            } else if (nx > max_x) {
+                nx = max_x;
+                stopped = true;
+            }
+            if (ny < min_y) {
+                ny = min_y;
+                stopped = true;
+            } else if (ny > max_y) {
+                ny = max_y;
+                stopped = true;
+            }
+            dog.SetPosition(nx, ny);
+            if (stopped) {
+                dog.SetSpeed(0.0, 0.0);
+            }
         }
     }
 
@@ -238,6 +294,13 @@ public:
 
     void SetDefaultDogSpeed(double speed) { default_dog_speed_ = speed; }
     double GetDefaultDogSpeed() const { return default_dog_speed_; }
+
+    void SetRandomizeSpawn(bool value) {
+        randomize_spawn_ = value;
+        for (auto& map : maps_) {
+            map.SetRandomizeSpawn(value);
+        }
+    }
 
     Map* FindMap(const Map::Id& id) noexcept {
         if (auto it = map_id_to_index_.find(id); it != map_id_to_index_.end()) {
@@ -285,8 +348,7 @@ private:
     MapIdToIndex map_id_to_index_;
     std::unordered_map<Map::Id, GameSession, MapIdHasher> sessions_;
     double default_dog_speed_ = 1.0;
+    bool randomize_spawn_ = false;
 };
 
-}
-// namespace model
-
+}  // namespace model
