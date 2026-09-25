@@ -198,32 +198,32 @@ private:
         using namespace std::literals;
         if (t == maps_target) {
             if (req.method() != http::verb::get && req.method() != http::verb::head) {
-                send(make_json(http::status::bad_request, std::string{bad_request_body}));
+                send(make_json(http::status::bad_request, std::string{bad_request_body}, "no-cache"sv));
                 return;
             }
             json::array a;
             for (auto& m : game_.GetMaps()) {
                 a.emplace_back(json::object{{json_keys::id, *m.GetId()}, {json_keys::name, m.GetName()}});
             }
-            send(make_json(http::status::ok, json::serialize(a)));
+            send(make_json(http::status::ok, json::serialize(a), "no-cache"sv));
             return;
         }
         if (t.starts_with(maps_prefix)) {
             if (req.method() != http::verb::get && req.method() != http::verb::head) {
-                send(make_json(http::status::bad_request, std::string{bad_request_body}));
+                send(make_json(http::status::bad_request, std::string{bad_request_body}, "no-cache"sv));
                 return;
             }
             std::string mid{t.substr(maps_prefix.size())};
             if (mid.empty() || mid.find('/') != std::string::npos) {
-                send(make_json(http::status::bad_request, std::string{bad_request_body}));
+                send(make_json(http::status::bad_request, std::string{bad_request_body}, "no-cache"sv));
                 return;
             }
             auto* m = game_.FindMap(model::Map::Id(mid));
             if (!m) {
-                send(make_json(http::status::not_found, std::string{map_not_found_body}));
+                send(make_json(http::status::not_found, std::string{map_not_found_body}, "no-cache"sv));
                 return;
             }
-            send(make_json(http::status::ok, json::serialize(SerializeMap(*m))));
+            send(make_json(http::status::ok, json::serialize(SerializeMap(*m)), "no-cache"sv));
             return;
         }
         if (t == join_target) {
