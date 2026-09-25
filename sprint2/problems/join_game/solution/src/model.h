@@ -2,6 +2,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <deque>
 #include <random>
 #include <algorithm>
 #include <memory>
@@ -168,8 +169,9 @@ public:
         dog.SetDirection("U");
         return &dog;
     }
-    const std::vector<Dog>& GetDogs() const { return dogs_; }
-    std::vector<Dog>& GetDogs() { return dogs_; }
+    // deque keeps pointers/references to elements valid across push_back
+    const std::deque<Dog>& GetDogs() const { return dogs_; }
+    std::deque<Dog>& GetDogs() { return dogs_; }
 
     void SetDogSpeed(double speed) { dog_speed_ = speed; }
     double GetDogSpeed() const { return dog_speed_; }
@@ -183,7 +185,7 @@ private:
     Buildings buildings_;
     OfficeIdToIndex warehouse_id_to_index_;
     Offices offices_;
-    std::vector<Dog> dogs_;
+    std::deque<Dog> dogs_;
     double dog_speed_ = 1.0;
 };
 
@@ -213,7 +215,7 @@ public:
         return &players_.back();
     }
 
-    const std::vector<Player>& GetPlayers() const { return players_; }
+    const std::deque<Player>& GetPlayers() const { return players_; }
 
     Player* FindPlayerByToken(const std::string& token) {
         for (auto& player : players_) {
@@ -291,7 +293,7 @@ public:
 
 private:
     Map* map_;
-    std::vector<Player> players_;
+    std::deque<Player> players_;
 };
 
 class Game {
