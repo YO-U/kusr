@@ -12,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <string_view>
+#include <functional>
 
 namespace http_server {
 
@@ -51,6 +52,15 @@ protected:
 
     ~SessionBase() = default;
 
+    tcp::endpoint GetRemoteEndpoint() const {
+        beast::error_code ec;
+        auto ep = stream_.socket().remote_endpoint(ec);
+        if (ec) {
+            return {};
+        }
+        return ep;
+    }
+
 private:
     void Read();
     void OnRead(beast::error_code ec, [[maybe_unused]] std::size_t bytes_read);
@@ -75,9 +85,10 @@ public:
 
 private:
     void HandleRequest(HttpRequest&& request) override {
-        request_handler_(std::move(request), [self = GetSharedThis()](auto&& response) {
-            self->Write(std::forward<decltype(response)>(response));
-        });
+        request_handler_(GetRemoteEndpoint(), std::move(request),
+                         [self = GetSharedThis()](auto&& response) {
+                             self->Write(std::forward<decltype(response)>(response));
+                         });
     }
 
     std::shared_ptr<SessionBase> GetSharedThis() override {
@@ -93,7 +104,8 @@ public:
     template <typename Handler>
     Listener(net::io_context& ioc, const tcp::endpoint& endpoint, Handler&& request_handler)
         : ioc_(ioc)
-        , acceptor_(net::make_strand(ioc))
+        , strand_(net::make_strand(ioc))
+        , acceptor_(strand_)
         , request_handler_(std::forward<Handler>(request_handler)) {
         acceptor_.open(endpoint.protocol());
         acceptor_.set_option(net::socket_base::reuse_address(true));
@@ -107,8 +119,7 @@ public:
 
 private:
     void DoAccept() {
-        acceptor_.async_accept(
-            net::make_strand(ioc_),
+        acceptor_.async_accept(strand_,
             beast::bind_front_handler(&Listener::OnAccept, this->shared_from_this()));
     }
 
@@ -126,6 +137,7 @@ private:
     }
 
     net::io_context& ioc_;
+    net::strand<net::io_context::executor_type> strand_;
     tcp::acceptor acceptor_;
     RequestHandler request_handler_;
 };

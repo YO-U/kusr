@@ -17,27 +17,43 @@ namespace {
 template <typename Fn>
 void RunWorkers(unsigned n, const Fn& fn) {
     n = std::max(1u, n);
-    std::vector<std::jthread> workers; workers.reserve(n-1);
-    while(--n) workers.emplace_back(fn);
+    std::vector<std::jthread> workers;
+    workers.reserve(n - 1);
+    while (--n) {
+        workers.emplace_back(fn);
+    }
     fn();
 }
 
-}
+}  // namespace
 
 int main(int argc, const char* argv[]) {
-    if(argc!=3){std::cerr<<"Usage: game_server <game-config-json> <static-root>"sv<<std::endl;return EXIT_FAILURE;}
-    try{
-        fs::path cp(argv[1]); fs::path sr(argv[2]);
-        model::Game game=json_loader::LoadGame(cp);
-        const unsigned nt=std::thread::hardware_concurrency();
-        net::io_context ioc(nt);
-        net::signal_set signals(ioc,SIGINT,SIGTERM);
-        signals.async_wait([&ioc](const sys::error_code& ec,[[maybe_unused]]int sn){if(!ec)ioc.stop();});
-        http_handler::RequestHandler handler{game,sr};
-        const auto addr=net::ip::make_address("0.0.0.0");
-        constexpr net::ip::port_type port=8080;
-        http_server::ServeHttp(ioc,{addr,port},[&handler](auto&& req,auto&& send){handler(std::forward<decltype(req)>(req),std::forward<decltype(send)>(send));});
-        std::cout<<"Server has started..."sv<<std::endl;
-        RunWorkers(std::max(1u,nt),[&ioc]{ioc.run();});
-    }catch(const std::exception& ex){std::cerr<<ex.what()<<std::endl;return EXIT_FAILURE;}
+    if (argc != 3) {
+        std::cerr << "Usage: game_server <game-config-json> <static-root>"sv << std::endl;
+        return EXIT_FAILURE;
+    }
+    try {
+        fs::path config_path(argv[1]);
+        fs::path static_root(argv[2]);
+        model::Game game = json_loader::LoadGame(config_path);
+        const unsigned num_threads = std::thread::hardware_concurrency();
+        net::io_context ioc(num_threads);
+        net::signal_set signals(ioc, SIGINT, SIGTERM);
+        signals.async_wait([&ioc](const sys::error_code& ec, [[maybe_unused]] int signal_number) {
+            if (!ec) {
+                ioc.stop();
+            }
+        });
+        http_handler::RequestHandler handler{game, static_root};
+        const auto address = net::ip::make_address("0.0.0.0");
+        constexpr net::ip::port_type port = 8080;
+        http_server::ServeHttp(ioc, {address, port}, [&handler](auto&& /*endpoint*/, auto&& req, auto&& send) {
+            handler(std::forward<decltype(req)>(req), std::forward<decltype(send)>(send));
+        });
+        std::cout << "Server has started..."sv << std::endl;
+        RunWorkers(std::max(1u, num_threads), [&ioc] { ioc.run(); });
+    } catch (const std::exception& ex) {
+        std::cerr << ex.what() << std::endl;
+        return EXIT_FAILURE;
+    }
 }

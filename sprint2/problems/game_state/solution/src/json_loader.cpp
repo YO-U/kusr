@@ -12,6 +12,19 @@ namespace json = boost::json;
 
 namespace {
 
+double AsDouble(const json::value& value) {
+    if (value.is_double()) {
+        return value.as_double();
+    }
+    if (value.is_int64()) {
+        return static_cast<double>(value.as_int64());
+    }
+    if (value.is_uint64()) {
+        return static_cast<double>(value.as_uint64());
+    }
+    throw std::runtime_error("Expected number");
+}
+
 model::Road ParseRoad(const json::object& road_obj) {
     const int x0 = static_cast<int>(road_obj.at("x0").as_int64());
     const int y0 = static_cast<int>(road_obj.at("y0").as_int64());
@@ -82,7 +95,7 @@ model::Map ParseMap(const json::value& map_value, double default_speed) {
 
     double speed = default_speed;
     if (auto ds = map_obj.find("dogSpeed"); ds != map_obj.end()) {
-        speed = ds->value().as_double();
+        speed = AsDouble(ds->value());
     }
     map.SetDogSpeed(speed);
 
@@ -114,7 +127,7 @@ model::Game LoadGame(const std::filesystem::path& json_path) {
     model::Game game;
     double default_speed = 1.0;
     if (auto ds = root.find("defaultDogSpeed"); ds != root.end()) {
-        default_speed = ds->value().as_double();
+        default_speed = AsDouble(ds->value());
     }
     game.SetDefaultDogSpeed(default_speed);
 

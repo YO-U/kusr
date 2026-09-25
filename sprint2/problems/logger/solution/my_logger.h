@@ -8,7 +8,6 @@
 #include <string_view>
 #include <optional>
 #include <mutex>
-#include <thread>
 #include <ctime>
 
 using namespace std::literals;
@@ -16,17 +15,17 @@ using namespace std::literals;
 #define LOG(...) Logger::GetInstance().Log(__VA_ARGS__)
 
 class Logger {
-    auto GetTimeInternal() const {
+    auto GetTime() const {
         if (manual_ts_) {
             return *manual_ts_;
         }
         return std::chrono::system_clock::now();
     }
 
-    std::string GetTimeStampInternal() const {
-        const auto now = GetTimeInternal();
+    std::string GetTimeStamp() const {
+        const auto now = GetTime();
         const auto t_c = std::chrono::system_clock::to_time_t(now);
-        std::tm tm_buf;
+        std::tm tm_buf{};
 #ifdef _WIN32
         localtime_s(&tm_buf, &t_c);
 #else
@@ -37,10 +36,10 @@ class Logger {
         return ss.str();
     }
 
-    std::string GetFileTimeStampInternal() const {
-        const auto now = GetTimeInternal();
+    std::string GetFileTimeStamp() const {
+        const auto now = GetTime();
         const auto t_c = std::chrono::system_clock::to_time_t(now);
-        std::tm tm_buf;
+        std::tm tm_buf{};
 #ifdef _WIN32
         localtime_s(&tm_buf, &t_c);
 #else
@@ -60,14 +59,14 @@ public:
         return obj;
     }
 
-    template<class... Ts>
+    template <class... Ts>
     void Log(const Ts&... args) {
         std::lock_guard lock(mutex_);
-        
-        const auto timestamp = GetTimeStampInternal();
-        const auto file_timestamp = GetFileTimeStampInternal();
-        
-        std::string filename = "/var/log/sample_log_" + file_timestamp + ".log";
+
+        const auto timestamp = GetTimeStamp();
+        const auto file_timestamp = GetFileTimeStamp();
+        const std::string filename = "/var/log/sample_log_" + file_timestamp + ".log";
+
         if (!log_file_.is_open() || current_file_ != filename) {
             if (log_file_.is_open()) {
                 log_file_.close();
@@ -75,10 +74,10 @@ public:
             current_file_ = filename;
             log_file_.open(filename, std::ios::app);
         }
-        
+
         if (log_file_.is_open()) {
             log_file_ << timestamp << ": ";
-            WriteArgs(log_file_, args...);
+            (log_file_ << ... << args);
             log_file_ << std::endl;
         }
     }
@@ -89,17 +88,6 @@ public:
     }
 
 private:
-    template<class T>
-    void WriteArgs(std::ofstream& out, const T& arg) {
-        out << arg;
-    }
-
-    template<class T, class... Ts>
-    void WriteArgs(std::ofstream& out, const T& arg, const Ts&... args) {
-        out << arg;
-        WriteArgs(out, args...);
-    }
-
     std::optional<std::chrono::system_clock::time_point> manual_ts_;
     mutable std::mutex mutex_;
     std::ofstream log_file_;
