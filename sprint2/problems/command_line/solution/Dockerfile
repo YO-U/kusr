@@ -1,9 +1,12 @@
 ﻿FROM gcc:12.5 AS build
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3-pip cmake && \
-    pip3 install --no-cache-dir conan==1.62.0 && \
+    apt-get install -y --no-install-recommends python3-pip python3-venv cmake && \
+    python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir conan==1.62.0 && \
     rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 COPY conanfile.txt .
