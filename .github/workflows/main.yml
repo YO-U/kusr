@@ -106,7 +106,8 @@ jobs:
           cp -R /home/forconan/.conan /github/home/.conan
 
       # Final review PR keeps only command_line (+ logger). For CI, reuse that
-      # solution for earlier sprint2 game-server tasks.
+      # solution for earlier sprint2 game-server tasks, but keep each task's
+      # own precode data/static (configs differ: map1-only vs full maps).
       - name: Prepare sprint2 solutions from command_line
         run: |
           set -e
@@ -116,6 +117,19 @@ jobs:
             mkdir -p "sprint2/problems/$dir"
             rm -rf "$DEST"
             cp -a "$SRC" "$DEST"
+
+            PRECODE=sprint2/problems/$dir/precode
+            if [ ! -d "$PRECODE" ] && [ "$dir" = "server_logging" ]; then
+              PRECODE=sprint2/problems/static_content/precode
+            fi
+            if [ -d "$PRECODE/data" ]; then
+              rm -rf "$DEST/data"
+              cp -a "$PRECODE/data" "$DEST/data"
+            fi
+            if [ -d "$PRECODE/static" ]; then
+              rm -rf "$DEST/static"
+              cp -a "$PRECODE/static" "$DEST/static"
+            fi
           done
 
       - name: run tests sprint2 static_content
