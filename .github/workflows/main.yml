@@ -113,6 +113,7 @@ jobs:
           SRC=sprint2/problems/command_line/solution
           for dir in static_content server_logging join_game game_state move_players time_control; do
             DEST=sprint2/problems/$dir/solution
+            mkdir -p "sprint2/problems/$dir"
             rm -rf "$DEST"
             cp -a "$SRC" "$DEST"
           done
