@@ -105,6 +105,18 @@ jobs:
           pip install -U conan==1.59.0
           cp -R /home/forconan/.conan /github/home/.conan
 
+      # Final review PR keeps only command_line (+ logger). For CI, reuse that
+      # solution for earlier sprint2 game-server tasks.
+      - name: Prepare sprint2 solutions from command_line
+        run: |
+          set -e
+          SRC=sprint2/problems/command_line/solution
+          for dir in static_content server_logging join_game game_state move_players time_control; do
+            DEST=sprint2/problems/$dir/solution
+            rm -rf "$DEST"
+            cp -a "$SRC" "$DEST"
+          done
+
       - name: run tests sprint2 static_content
         run: |
           cd cpp-backend-tests-practicum/scripts/sprint2
