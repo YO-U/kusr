@@ -15,5 +15,3 @@ console:
   enabled: false                            # отображение в консоли процесса стрельбы и результатов
 telegraf:
   enabled: false                            # модуль мониторинга системных ресурсов
-tank:
-  artifacts_base_dir: "./logs"
