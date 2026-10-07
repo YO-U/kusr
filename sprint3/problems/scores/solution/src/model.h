@@ -12,6 +12,7 @@
 #include <optional>
 #include <array>
 #include <chrono>
+#include <numeric>
 
 #include "collision_detector.h"
 #include "loot_generator.h"
@@ -232,9 +233,10 @@ public:
     bool HasBagSpace(size_t capacity) const { return bag_.size() < capacity; }
     void AddToBag(BagItem item) { bag_.push_back(item); }
     void ReturnBag(const Map& map) {
-        for (const auto& item : bag_) {
-            score_ += map.GetLootValue(item.type);
-        }
+        score_ = std::accumulate(bag_.begin(), bag_.end(), score_,
+                                 [&map](int sum, const BagItem& item) {
+                                     return sum + map.GetLootValue(item.type);
+                                 });
         bag_.clear();
     }
 
@@ -265,12 +267,9 @@ public:
     const std::vector<LostObject>& GetLostObjects() const { return lost_objects_; }
 
     Player* FindPlayerByToken(const std::string& token) {
-        for (auto& player : players_) {
-            if (player.GetToken() == token) {
-                return &player;
-            }
-        }
-        return nullptr;
+        auto it = std::find_if(players_.begin(), players_.end(),
+                               [&token](const Player& player) { return player.GetToken() == token; });
+        return it != players_.end() ? &*it : nullptr;
     }
 
     void Tick(int time_delta_ms);

@@ -135,10 +135,9 @@ inline std::optional<std::string> ExtractBearerToken(std::string_view auth) {
     if (token.size() != 32) {
         return std::nullopt;
     }
-    for (unsigned char c : token) {
-        if (!std::isxdigit(c)) {
-            return std::nullopt;
-        }
+    if (std::any_of(token.begin(), token.end(),
+                    [](unsigned char c) { return !std::isxdigit(c); })) {
+        return std::nullopt;
     }
     return std::string(token);
 }
@@ -308,13 +307,9 @@ private:
         std::string tok = model::Game::GenerateToken();
         auto* p = session.AddPlayer(un, tok, game_.GetRandomizeSpawnPoints());
         const auto& ps = session.GetPlayers();
-        uint32_t pid = 0;
-        for (size_t i = 0; i < ps.size(); ++i) {
-            if (&ps[i] == p) {
-                pid = static_cast<uint32_t>(i);
-                break;
-            }
-        }
+        auto pit = std::find_if(ps.begin(), ps.end(),
+                                [p](const model::Player& player) { return &player == p; });
+        const auto pid = static_cast<uint32_t>(std::distance(ps.begin(), pit));
         json::object rb;
         rb[json_keys::auth_token] = tok;
         rb[json_keys::player_id] = pid;
@@ -602,10 +597,10 @@ private:
         const bool is_head = req.method() == http::verb::head;
         std::string dt = UrlDecode(std::string(req.target()));
         if (auto p = dt.find('?'); p != std::string::npos) {
-            dt = dt.substr(0, p);
+            dt.resize(p);
         }
         if (!dt.empty() && dt[0] == '/') {
-            dt = dt.substr(1);
+            dt.erase(0, 1);
         }
         fs::path fp = static_root_ / fs::path(dt);
         std::error_code ec;
