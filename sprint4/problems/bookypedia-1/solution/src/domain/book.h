@@ -1,8 +1,9 @@
 #pragma once
 #include <string>
+#include <vector>
 
 #include "../util/tagged_uuid.h"
-#include "author_fwd.h"
+#include "author.h"
 
 namespace domain {
 
