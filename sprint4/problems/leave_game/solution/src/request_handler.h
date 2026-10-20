@@ -534,6 +534,7 @@ private:
         } else if (mv.empty()) {
             // Stop: begin idle accumulation; do not clear idle timer.
             d->SetSpeed(0, 0);
+            pl->MarkStopped();
         } else {
             send(make_json(http::status::bad_request,
                            JsonError("invalidArgument", "Failed to parse action"), "no-cache"sv));

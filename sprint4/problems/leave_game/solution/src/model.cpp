@@ -219,9 +219,8 @@ std::vector<RetiredPlayerInfo> GameSession::Tick(int time_delta_ms, int retireme
     for (auto it = players_.begin(); it != players_.end(); ++player_index) {
         Dog* dog = it->GetDog();
         it->AddPlayTime(time_delta_ms);
-        // Continuous idle only: a directional move (active_) or non-zero speed
-        // at tick start clears idle for this tick, even if the dog hits a wall.
-        if (was_moving[player_index] || it->ConsumeActiveFlag()) {
+        const bool active = it->ConsumeActiveFlag();
+        if (was_moving[player_index] || active) {
             it->ResetIdleTime();
         } else {
             it->AddIdleTime(time_delta_ms);

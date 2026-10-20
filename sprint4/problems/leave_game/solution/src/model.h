@@ -270,6 +270,8 @@ public:
         active_ = true;
     }
 
+    void MarkStopped() { active_ = false; }
+
     bool ConsumeActiveFlag() {
         const bool was_active = active_;
         active_ = false;
