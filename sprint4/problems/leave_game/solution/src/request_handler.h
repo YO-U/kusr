@@ -329,13 +329,9 @@ private:
         auto& session = game_.GetOrCreateSession(mid, m);
         std::string tok = model::Game::GenerateToken();
         auto* p = session.AddPlayer(un, tok, game_.GetRandomizeSpawnPoints());
-        const auto& ps = session.GetPlayers();
-        auto pit = std::find_if(ps.begin(), ps.end(),
-                                [p](const model::Player& player) { return &player == p; });
-        const auto pid = static_cast<uint32_t>(std::distance(ps.begin(), pit));
         json::object rb;
         rb[json_keys::auth_token] = tok;
-        rb[json_keys::player_id] = pid;
+        rb[json_keys::player_id] = p->GetId();
         send(make_json(http::status::ok, json::serialize(rb), "no-cache"sv));
     }
 
@@ -377,10 +373,10 @@ private:
             return;
         }
         json::object po;
-        for (size_t i = 0; i < gs->GetPlayers().size(); ++i) {
+        for (const auto& player : gs->GetPlayers()) {
             json::object pi;
-            pi[json_keys::name] = gs->GetPlayers()[i].GetDog()->GetName();
-            po[std::to_string(i)] = pi;
+            pi[json_keys::name] = player.GetDog()->GetName();
+            po[std::to_string(player.GetId())] = pi;
         }
         send(make_json(http::status::ok, json::serialize(po), "no-cache"sv));
     }
@@ -423,8 +419,8 @@ private:
             return;
         }
         json::object po;
-        for (size_t i = 0; i < gs->GetPlayers().size(); ++i) {
-            auto& d = *gs->GetPlayers()[i].GetDog();
+        for (const auto& player : gs->GetPlayers()) {
+            auto& d = *player.GetDog();
             json::object di;
             json::array pa;
             pa.emplace_back(d.GetPosition().first);
@@ -436,12 +432,12 @@ private:
             di[json_keys::speed] = sa;
             di[json_keys::dir] = d.GetDirection();
             json::array bag;
-            for (const auto& item : gs->GetPlayers()[i].GetBag()) {
+            for (const auto& item : player.GetBag()) {
                 bag.emplace_back(json::object{{json_keys::id, item.id}, {json_keys::type, item.type}});
             }
             di[json_keys::bag] = std::move(bag);
-            di[json_keys::score] = gs->GetPlayers()[i].GetScore();
-            po[std::to_string(i)] = di;
+            di[json_keys::score] = player.GetScore();
+            po[std::to_string(player.GetId())] = di;
         }
         json::object lo;
         for (const auto& object : gs->GetLostObjects()) {
@@ -522,20 +518,21 @@ private:
         if (mv == "L") {
             d->SetSpeed(-speed, 0);
             d->SetDirection("L");
-            pl->ResetIdleTime();
+            pl->MarkActive();
         } else if (mv == "R") {
             d->SetSpeed(speed, 0);
             d->SetDirection("R");
-            pl->ResetIdleTime();
+            pl->MarkActive();
         } else if (mv == "U") {
             d->SetSpeed(0, -speed);
             d->SetDirection("U");
-            pl->ResetIdleTime();
+            pl->MarkActive();
         } else if (mv == "D") {
             d->SetSpeed(0, speed);
             d->SetDirection("D");
-            pl->ResetIdleTime();
+            pl->MarkActive();
         } else if (mv.empty()) {
+            // Stop: begin idle accumulation; do not clear idle timer.
             d->SetSpeed(0, 0);
         } else {
             send(make_json(http::status::bad_request,

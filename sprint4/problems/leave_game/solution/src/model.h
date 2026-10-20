@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -232,8 +233,13 @@ private:
 
 class Player {
 public:
-    Player(Dog* dog, const std::string& token) : dog_(dog), token_(token) {}
+    Player(Dog* dog, const std::string& token, uint32_t id)
+        : dog_(dog)
+        , token_(token)
+        , id_(id) {
+    }
 
+    uint32_t GetId() const noexcept { return id_; }
     Dog* GetDog() { return dog_; }
     const Dog* GetDog() const { return dog_; }
     const std::string& GetToken() const { return token_; }
@@ -256,13 +262,29 @@ public:
     void AddIdleTime(int time_delta_ms) { idle_time_ms_ += time_delta_ms; }
     void ResetIdleTime() { idle_time_ms_ = 0; }
 
+    // Marks player as active after a directional move. Clears accumulated idle
+    // immediately and keeps the tick from counting as idle even if the dog
+    // hits a road edge and speed becomes zero during that tick.
+    void MarkActive() {
+        idle_time_ms_ = 0;
+        active_ = true;
+    }
+
+    bool ConsumeActiveFlag() {
+        const bool was_active = active_;
+        active_ = false;
+        return was_active;
+    }
+
 private:
     Dog* dog_;
     std::string token_;
+    uint32_t id_ = 0;
     std::vector<BagItem> bag_;
     int score_ = 0;
     int idle_time_ms_ = 0;
     int play_time_ms_ = 0;
+    bool active_ = false;
 };
 
 class GameSession {
@@ -277,7 +299,7 @@ public:
 
     Player* AddPlayer(const std::string& name, const std::string& token, bool randomize_spawn) {
         const Dog* dog = map_->AddDog(name, randomize_spawn);
-        players_.emplace_back(const_cast<Dog*>(dog), token);
+        players_.emplace_back(const_cast<Dog*>(dog), token, next_player_id_++);
         return &players_.back();
     }
 
@@ -297,6 +319,7 @@ private:
     std::deque<Player> players_;
     std::vector<LostObject> lost_objects_;
     size_t next_lost_object_id_ = 0;
+    uint32_t next_player_id_ = 0;
     loot_gen::LootGenerator loot_generator_;
 };
 
