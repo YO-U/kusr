@@ -1,70 +1,81 @@
-#include <boost/archive/text_iarchive.hpp>
-#include <boost/archive/text_oarchive.hpp>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <sstream>
 
+#include "../src/game_serialization.h"
 #include "../src/model.h"
-#include "../src/model_serialization.h"
 
-using namespace model;
 using namespace std::literals;
+
 namespace {
 
-using InputArchive = boost::archive::text_iarchive;
-using OutputArchive = boost::archive::text_oarchive;
+model::Game MakeGameWithSession() {
+    model::Game game;
+    model::Map map{model::Map::Id{"map1"s}, "Map 1"s};
+    map.AddRoad(model::Road{model::Road::HORIZONTAL, model::Point{0, 0}, 10});
+    map.SetBagCapacity(3);
+    map.SetLootValues({5, 10});
+    game.AddMap(std::move(map));
 
-struct Fixture {
-    std::stringstream strm;
-    OutputArchive output_archive{strm};
-};
+    auto* stored_map = game.FindMap(model::Map::Id{"map1"s});
+    auto& session = game.GetOrCreateSession(stored_map->GetId(), stored_map);
+    auto* player = session.AddPlayer("Pluto"s, "0123456789abcdef0123456789abcdef"s, false);
+    auto* dog = player->GetDog();
+    dog->SetPosition(42.2, 12.5);
+    dog->SetSpeed(2.3, -1.2);
+    dog->SetDirection("R"s);
+    player->SetScore(42);
+    player->SetIdleTimeMs(100);
+    player->SetPlayTimeMs(1000);
+    player->SetBag({{.id = 10, .type = 2}});
+    session.SetLostObjects({{.id = 7, .type = 1, .position = {1.5, 2.5}}}, 8);
+    return game;
+}
 
 }  // namespace
 
-SCENARIO_METHOD(Fixture, "Point serialization") {
-    GIVEN("A point") {
-        const geom::Point2D p{10, 20};
-        WHEN("point is serialized") {
-            output_archive << p;
+SCENARIO("Game state JSON roundtrip") {
+    GIVEN("a game with a player and lost objects") {
+        model::Game original = MakeGameWithSession();
 
-            THEN("it is equal to point after serialization") {
-                InputArchive input_archive{strm};
-                geom::Point2D restored_point;
-                input_archive >> restored_point;
-                CHECK(p == restored_point);
-            }
-        }
-    }
-}
-
-SCENARIO_METHOD(Fixture, "Dog Serialization") {
-    GIVEN("a dog") {
-        const auto dog = [] {
-            Dog dog{Dog::Id{42}, "Pluto"s, {42.2, 12.5}, 3};
-            dog.AddScore(42);
-            CHECK(dog.PutToBag({FoundObject::Id{10}, 2u}));
-            dog.SetDirection(Direction::EAST);
-            dog.SetSpeed({2.3, -1.2});
-            return dog;
-        }();
-
-        WHEN("dog is serialized") {
+        WHEN("state is serialized and deserialized") {
+            const auto json = game_serialization::SerializeGame(original);
+            model::Game restored;
             {
-                serialization::DogRepr repr{dog};
-                output_archive << repr;
+                model::Map map{model::Map::Id{"map1"s}, "Map 1"s};
+                map.AddRoad(model::Road{model::Road::HORIZONTAL, model::Point{0, 0}, 10});
+                map.SetBagCapacity(3);
+                map.SetLootValues({5, 10});
+                restored.AddMap(std::move(map));
             }
+            game_serialization::DeserializeGame(restored, json);
 
-            THEN("it can be deserialized") {
-                InputArchive input_archive{strm};
-                serialization::DogRepr repr;
-                input_archive >> repr;
-                const auto restored = repr.Restore();
+            THEN("players and lost objects match") {
+                auto* session = restored.FindSession(model::Map::Id{"map1"s});
+                REQUIRE(session != nullptr);
+                REQUIRE(session->GetPlayers().size() == 1);
 
-                CHECK(dog.GetId() == restored.GetId());
-                CHECK(dog.GetName() == restored.GetName());
-                CHECK(dog.GetPosition() == restored.GetPosition());
-                CHECK(dog.GetSpeed() == restored.GetSpeed());
-                CHECK(dog.GetBagCapacity() == restored.GetBagCapacity());
-                CHECK(dog.GetBagContent() == restored.GetBagContent());
+                const auto& player = session->GetPlayers().front();
+                const auto* dog = player.GetDog();
+                CHECK(player.GetToken() == "0123456789abcdef0123456789abcdef"s);
+                CHECK(dog->GetName() == "Pluto"s);
+                CHECK(dog->GetPosition().first == Catch::Approx(42.2));
+                CHECK(dog->GetPosition().second == Catch::Approx(12.5));
+                CHECK(dog->GetSpeed().first == Catch::Approx(2.3));
+                CHECK(dog->GetSpeed().second == Catch::Approx(-1.2));
+                CHECK(dog->GetDirection() == "R"s);
+                CHECK(player.GetScore() == 42);
+                CHECK(player.GetIdleTimeMs() == 100);
+                CHECK(player.GetPlayTimeMs() == 1000);
+                REQUIRE(player.GetBag().size() == 1);
+                CHECK(player.GetBag().front().id == 10);
+                CHECK(player.GetBag().front().type == 2);
+
+                REQUIRE(session->GetLostObjects().size() == 1);
+                CHECK(session->GetLostObjects().front().id == 7);
+                CHECK(session->GetLostObjects().front().type == 1);
+                CHECK(session->GetLostObjects().front().position.first == Catch::Approx(1.5));
+                CHECK(session->GetLostObjects().front().position.second == Catch::Approx(2.5));
+                CHECK(session->GetNextLostObjectId() == 8);
             }
         }
     }

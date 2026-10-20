@@ -44,9 +44,12 @@ add_executable(game_server
 target_link_libraries(game_server PRIVATE game_model CONAN_PKG::boost CONAN_PKG::libpq CONAN_PKG::libpqxx Threads::Threads)
 
 add_executable(game_server_tests
+    tests/main.cpp
     tests/loot_generator_tests.cpp
+    tests/state-serialization-tests.cpp
+    src/boost_json.cpp
 )
-target_link_libraries(game_server_tests PRIVATE game_model CONAN_PKG::catch2)
+target_link_libraries(game_server_tests PRIVATE game_model CONAN_PKG::catch2 CONAN_PKG::boost)
 
 include(CTest)
 if(DEFINED CONAN_BUILD_DIRS_CATCH2_RELEASE AND EXISTS "${CONAN_BUILD_DIRS_CATCH2_RELEASE}/Catch.cmake")
