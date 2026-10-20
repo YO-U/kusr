@@ -48,18 +48,16 @@ void UseCasesImpl::AddBook(const AddBookParams& params) {
     auto& author_repo = static_cast<postgres::AuthorRepositoryImpl&>(authors_);
     auto& book_repo = static_cast<postgres::BookRepositoryImpl&>(books_);
 
-    pqxx::work work{*connection_};
-
     AuthorId author_id;
+    std::optional<Author> author_to_create;
     if (params.author_id) {
         author_id = AuthorId::FromString(*params.author_id);
     } else if (params.author_name) {
         if (auto author = authors_.GetByName(*params.author_name)) {
             author_id = author->GetId();
         } else if (params.create_author_if_missing) {
-            Author new_author{AuthorId::New(), *params.author_name};
-            author_id = new_author.GetId();
-            author_repo.Save(work, new_author);
+            author_to_create.emplace(AuthorId::New(), *params.author_name);
+            author_id = author_to_create->GetId();
         } else {
             throw std::runtime_error("Author not found");
         }
@@ -67,6 +65,10 @@ void UseCasesImpl::AddBook(const AddBookParams& params) {
         throw std::runtime_error("Author not selected");
     }
 
+    pqxx::work work{*connection_};
+    if (author_to_create) {
+        author_repo.Save(work, *author_to_create);
+    }
     Book book{BookId::New(), params.title, params.publication_year, author_id};
     book_repo.Save(work, book);
     book_repo.SetTags(work, book.GetId(), params.tags);

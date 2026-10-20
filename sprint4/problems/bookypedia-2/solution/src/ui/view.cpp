@@ -278,7 +278,9 @@ bool View::EditBook(std::istream& cmd_input) const {
             if (!new_year_str.empty()) {
                 params.new_year = std::stoi(new_year_str);
             }
-            if (!new_tags_str.empty()) {
+            if (new_tags_str.empty()) {
+                params.new_tags = std::vector<std::string>{};
+            } else {
                 params.new_tags = NormalizeTags(new_tags_str);
             }
             use_cases_.EditBook(params);
