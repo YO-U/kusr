@@ -4,6 +4,7 @@
 #include <boost/asio/steady_timer.hpp>
 #include <boost/program_options.hpp>
 #include <boost/json.hpp>
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <thread>
@@ -93,7 +94,7 @@ std::shared_ptr<db::RetirementDatabase> CreateRetirementDatabase() {
     }
     const std::string url{db_url};
     auto pool = std::make_shared<db::ConnectionPool>(
-        std::max(1u, std::thread::hardware_concurrency()),
+        std::max(1u, std::min(4u, std::thread::hardware_concurrency())),
         [url] {
             return std::make_shared<pqxx::connection>(url);
         });

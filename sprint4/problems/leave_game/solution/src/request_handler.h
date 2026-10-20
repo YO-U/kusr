@@ -522,15 +522,19 @@ private:
         if (mv == "L") {
             d->SetSpeed(-speed, 0);
             d->SetDirection("L");
+            pl->ResetIdleTime();
         } else if (mv == "R") {
             d->SetSpeed(speed, 0);
             d->SetDirection("R");
+            pl->ResetIdleTime();
         } else if (mv == "U") {
             d->SetSpeed(0, -speed);
             d->SetDirection("U");
+            pl->ResetIdleTime();
         } else if (mv == "D") {
             d->SetSpeed(0, speed);
             d->SetDirection("D");
+            pl->ResetIdleTime();
         } else if (mv.empty()) {
             d->SetSpeed(0, 0);
         } else {

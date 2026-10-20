@@ -135,9 +135,14 @@ std::vector<RetiredPlayerInfo> GameSession::Tick(int time_delta_ms, int retireme
 
     const double dt = time_delta_ms / 1000.0;
     std::vector<std::pair<double, double>> start_positions;
+    std::vector<char> was_moving;
     start_positions.reserve(players_.size());
+    was_moving.reserve(players_.size());
     for (const auto& player : players_) {
-        start_positions.push_back(player.GetDog()->GetPosition());
+        const Dog* dog = player.GetDog();
+        start_positions.push_back(dog->GetPosition());
+        const auto [sx, sy] = dog->GetSpeed();
+        was_moving.push_back(sx != 0.0 || sy != 0.0);
     }
 
     for (auto& dog : map_->GetDogs()) {
@@ -210,14 +215,14 @@ std::vector<RetiredPlayerInfo> GameSession::Tick(int time_delta_ms, int retireme
     }
 
     std::vector<RetiredPlayerInfo> retired;
-    for (auto it = players_.begin(); it != players_.end();) {
+    size_t player_index = 0;
+    for (auto it = players_.begin(); it != players_.end(); ++player_index) {
         Dog* dog = it->GetDog();
         it->AddPlayTime(time_delta_ms);
-        const auto [sx, sy] = dog->GetSpeed();
-        if (sx == 0.0 && sy == 0.0) {
-            it->AddIdleTime(time_delta_ms);
-        } else {
+        if (was_moving[player_index]) {
             it->ResetIdleTime();
+        } else {
+            it->AddIdleTime(time_delta_ms);
         }
 
         if (it->GetIdleTimeMs() >= retirement_time_ms) {
